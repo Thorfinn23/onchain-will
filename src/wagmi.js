@@ -17,5 +17,16 @@ export const config = createConfig({
   },
 })
 
-export const CONTRACT_ADDRESS = '0xA46d4f92DAa148d39e9b24Cb1711762867fD58e6'
-export const DEPLOY_CHAIN = baseSepolia
+// Contract addresses per network
+export const CONTRACTS = {
+  [baseSepolia.id]: '0xA46d4f92DAa148d39e9b24Cb1711762867fD58e6', // Base Sepolia (testnet)
+  [base.id]: null, // Base Mainnet — deploy when ready
+}
+
+// USDC addresses per network
+export const USDC = {
+  [baseSepolia.id]: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
+  [base.id]: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+}
+
+export { base, baseSepolia }

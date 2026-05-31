@@ -1,35 +1,12 @@
 import { useState } from 'react'
-import { useAccount, useConnect, useDisconnect, useBalance, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
-import { baseSepolia } from 'wagmi/chains'
+import { useAccount, useConnect, useDisconnect, useBalance, useWriteContract, useSwitchChain } from 'wagmi'
 import { formatEther, parseUnits, encodeFunctionData } from 'viem'
-import { CONTRACT_ADDRESS, DEPLOY_CHAIN } from './wagmi.js'
+import { CONTRACTS, USDC, base, baseSepolia } from './wagmi.js'
 import OnChainWillABI from './OnChainWillABI.json'
 
-// USDC on Base Sepolia testnet
-const USDC_BASE = '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
 const USDC_ABI = [
-  { name: 'transfer', type: 'function', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' },
   { name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' },
   { name: 'balanceOf', type: 'function', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
-]
-const USDC_ABI = [
-  {
-    name: 'transfer',
-    type: 'function',
-    inputs: [
-      { name: 'to', type: 'address' },
-      { name: 'amount', type: 'uint256' }
-    ],
-    outputs: [{ type: 'bool' }],
-    stateMutability: 'nonpayable'
-  },
-  {
-    name: 'balanceOf',
-    type: 'function',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ type: 'uint256' }],
-    stateMutability: 'view'
-  }
 ]
 
 const TIMER_OPTIONS = [
@@ -52,7 +29,16 @@ export default function App() {
   const { address, isConnected, chain } = useAccount()
   const { connect, connectors } = useConnect()
   const { disconnect } = useDisconnect()
-  const { data: ethBalance } = useBalance({ address, chainId: base.id })
+  const { switchChain } = useSwitchChain()
+  const { writeContractAsync } = useWriteContract()
+
+  // Network selection — testnet or mainnet
+  const [selectedChain, setSelectedChain] = useState(baseSepolia)
+  const isTestnet = selectedChain.id === baseSepolia.id
+  const contractAddress = CONTRACTS[selectedChain.id]
+  const usdcAddress = USDC[selectedChain.id]
+
+  const { data: ethBalance } = useBalance({ address, chainId: selectedChain.id })
 
   const [step, setStep] = useState(1)
   const [beneficiary, setBeneficiary] = useState('')
@@ -63,11 +49,17 @@ export default function App() {
   const [loadingPlan, setLoadingPlan] = useState(false)
   const [approved, setApproved] = useState(false)
   const [txHash, setTxHash] = useState(null)
-  const [txStep, setTxStep] = useState('') // 'approving' | 'registering' | 'done'
+  const [txStep, setTxStep] = useState('')
 
-  const { writeContractAsync } = useWriteContract()
+  const wrongNetwork = isConnected && chain?.id !== selectedChain.id
 
-  const wrongNetwork = isConnected && chain?.id !== DEPLOY_CHAIN.id
+  async function handleNetworkSwitch(newChain) {
+    setSelectedChain(newChain)
+    setStep(1)
+    setApproved(false)
+    setTxHash(null)
+    if (isConnected) switchChain({ chainId: newChain.id })
+  }
 
   async function generateAIPlan() {
     if (!isValidAddress(beneficiary)) return
@@ -120,7 +112,7 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <Header address={address} isConnected={isConnected} onConnect={() => connect({ connector: connectors[0] })} onDisconnect={disconnect} wrongNetwork={wrongNetwork} />
+      <Header address={address} isConnected={isConnected} onConnect={() => connect({ connector: connectors[0] })} onDisconnect={disconnect} wrongNetwork={wrongNetwork} selectedChain={selectedChain} onSwitchNetwork={handleNetworkSwitch} />
 
       <main style={{ flex: 1, maxWidth: 720, margin: '0 auto', padding: '3rem 1.5rem', width: '100%' }}>
 
@@ -129,7 +121,7 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
         ) : wrongNetwork ? (
           <WrongNetwork />
         ) : approved ? (
-          <SuccessView txHash={txHash} beneficiary={beneficiary} beneficiaryName={beneficiaryName} timerDays={timerDays} usdcAmount={usdcAmount} address={address} />
+          <SuccessView txHash={txHash} beneficiary={beneficiary} beneficiaryName={beneficiaryName} timerDays={timerDays} usdcAmount={usdcAmount} address={address} chain={chain} />
         ) : (
           <div>
             <StepIndicator current={step} />
@@ -170,24 +162,30 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
                 txStep={txStep}
                 onBack={() => setStep(2)}
                 onApprove={async () => {
+                  if (!contractAddress) {
+                    alert('Mainnet contract not deployed yet. Please switch to Testnet.')
+                    return
+                  }
                   try {
                     // Step 1: Approve USDC spending
                     setTxStep('approving')
                     const amount = usdcAmount ? parseUnits(usdcAmount, 6) : parseUnits('999999999', 6)
                     await writeContractAsync({
-                      address: USDC_BASE,
+                      address: usdcAddress,
                       abi: USDC_ABI,
                       functionName: 'approve',
-                      args: [CONTRACT_ADDRESS, amount],
+                      args: [contractAddress, amount],
+                      chainId: selectedChain.id,
                     })
 
                     // Step 2: Register the will
                     setTxStep('registering')
                     const hash = await writeContractAsync({
-                      address: CONTRACT_ADDRESS,
+                      address: contractAddress,
                       abi: OnChainWillABI,
                       functionName: 'registerWill',
                       args: [beneficiary, amount, BigInt(timerDays), beneficiaryName || ''],
+                      chainId: selectedChain.id,
                     })
 
                     setTxHash(hash)
@@ -212,26 +210,57 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
   )
 }
 
-function Header({ address, isConnected, onConnect, onDisconnect, wrongNetwork }) {
+function NetworkToggle({ selectedChain, onSwitchNetwork }) {
+  const isTestnet = selectedChain.id === baseSepolia.id
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', background: '#111', border: '1px solid #2a2820', borderRadius: 'var(--radius)', padding: 3, gap: 2 }}>
+      <button
+        onClick={() => onSwitchNetwork(baseSepolia)}
+        style={{
+          padding: '4px 10px', borderRadius: 'var(--radius)', fontSize: 11, fontFamily: 'var(--mono)',
+          border: 'none', cursor: 'pointer', fontWeight: isTestnet ? 600 : 400,
+          background: isTestnet ? '#2a2820' : 'transparent',
+          color: isTestnet ? 'var(--gold)' : 'var(--muted)',
+          transition: 'all .15s',
+        }}
+      >TESTNET</button>
+      <button
+        onClick={() => onSwitchNetwork(base)}
+        style={{
+          padding: '4px 10px', borderRadius: 'var(--radius)', fontSize: 11, fontFamily: 'var(--mono)',
+          border: 'none', cursor: 'pointer', fontWeight: !isTestnet ? 600 : 400,
+          background: !isTestnet ? '#2a2820' : 'transparent',
+          color: !isTestnet ? 'var(--gold)' : 'var(--muted)',
+          transition: 'all .15s',
+        }}
+      >MAINNET</button>
+    </div>
+  )
+}
+
+function Header({ address, isConnected, onConnect, onDisconnect, wrongNetwork, selectedChain, onSwitchNetwork }) {
   return (
     <header style={{ borderBottom: '1px solid #1e1c18', padding: '1rem 2rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <img src="/logo.png" alt="OnChain Will" style={{ width: 32, height: 32, borderRadius: 8, objectFit: 'cover' }} />
         <span style={{ fontFamily: 'var(--serif)', fontSize: 18, letterSpacing: '0.02em' }}>OnChain Will</span>
       </div>
-      {isConnected ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {wrongNetwork && <span style={{ fontSize: 11, color: '#e74c3c', fontFamily: 'var(--mono)' }}>WRONG NETWORK</span>}
-          <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)', background: '#111', padding: '6px 12px', borderRadius: 'var(--radius)', border: '1px solid #222' }}>
-            {shortenAddress(address)}
-          </div>
-          <button onClick={onDisconnect} style={{ background: 'none', border: '1px solid #333', color: 'var(--muted)', padding: '6px 12px', borderRadius: 'var(--radius)', fontSize: 12 }}>
-            Disconnect
-          </button>
-        </div>
-      ) : (
-        <button onClick={onConnect} style={btnGold}>Connect Wallet</button>
-      )}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <NetworkToggle selectedChain={selectedChain} onSwitchNetwork={onSwitchNetwork} />
+        {isConnected ? (
+          <>
+            {wrongNetwork && <span style={{ fontSize: 11, color: '#e74c3c', fontFamily: 'var(--mono)' }}>WRONG NETWORK</span>}
+            <div style={{ fontFamily: 'var(--mono)', fontSize: 12, color: 'var(--muted)', background: '#111', padding: '6px 12px', borderRadius: 'var(--radius)', border: '1px solid #222' }}>
+              {shortenAddress(address)}
+            </div>
+            <button onClick={onDisconnect} style={{ background: 'none', border: '1px solid #333', color: 'var(--muted)', padding: '6px 12px', borderRadius: 'var(--radius)', fontSize: 12 }}>
+              Disconnect
+            </button>
+          </>
+        ) : (
+          <button onClick={onConnect} style={btnGold}>Connect Wallet</button>
+        )}
+      </div>
     </header>
   )
 }
@@ -520,7 +549,7 @@ function Step3({ loading, aiPlan, beneficiary, beneficiaryName, timerDays, usdcA
   )
 }
 
-function SuccessView({ txHash, beneficiary, beneficiaryName, timerDays, usdcAmount, address }) {
+function SuccessView({ txHash, beneficiary, beneficiaryName, timerDays, usdcAmount, address, chain }) {
   return (
     <div className="fade-up" style={{ textAlign: 'center', padding: '3rem 0' }}>
       <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
@@ -533,7 +562,7 @@ function SuccessView({ txHash, beneficiary, beneficiaryName, timerDays, usdcAmou
         <div style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--mono)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Transaction confirmed</div>
         <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--gold-light)', wordBreak: 'break-all', marginBottom: 12 }}>{txHash}</div>
         <a
-          href={`https://sepolia.basescan.org/tx/${txHash}`}
+          href={txHash ? `https://${chain?.id === baseSepolia.id ? 'sepolia.' : ''}basescan.org/tx/${txHash}` : '#'}
           target="_blank"
           rel="noopener noreferrer"
           style={{ fontSize: 12, color: 'var(--gold)', textDecoration: 'none' }}
