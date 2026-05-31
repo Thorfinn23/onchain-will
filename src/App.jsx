@@ -263,19 +263,15 @@ function LandingHero({ connectors, connect }) {
       </p>
 
       <div className="fade-up-4" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-        {connectors.map(c => {
-          const isCoinbase = c.name === 'Coinbase Wallet'
-          return (
-            <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <button onClick={() => connect({ connector: c })} style={btnGold}>
-                {isCoinbase ? '🔵 Connect Coinbase' : '🦊 Connect MetaMask'}
-              </button>
-              <span style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 200, textAlign: 'center', lineHeight: 1.4 }}>
-                {isCoinbase ? 'Coinbase Wallet or Smart Wallet' : 'MetaMask or any browser wallet'}
-              </span>
-            </div>
-          )
-        })}
+        {[
+          { key: 'metamask', label: '🦊 Connect MetaMask', desc: 'MetaMask or any browser wallet', connector: connectors.find(c => c.name !== 'Coinbase Wallet') },
+          { key: 'coinbase', label: '🔵 Connect Coinbase', desc: 'Coinbase Wallet or Smart Wallet', connector: connectors.find(c => c.name === 'Coinbase Wallet') },
+        ].filter(w => w.connector).map(w => (
+          <div key={w.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => connect({ connector: w.connector })} style={btnGold}>{w.label}</button>
+            <span style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 200, textAlign: 'center', lineHeight: 1.4 }}>{w.desc}</span>
+          </div>
+        ))}
       </div>
 
       <div style={{ background: '#110a0a', border: '1px solid #3a1a1a', borderRadius: 'var(--radius)', padding: '0.75rem 1rem', maxWidth: 480, margin: '0 auto 2rem', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
