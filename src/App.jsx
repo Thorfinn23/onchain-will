@@ -1,9 +1,17 @@
 import { useState } from 'react'
-import { useAccount, useConnect, useDisconnect, useBalance } from 'wagmi'
-import { base } from 'wagmi/chains'
-import { formatEther, parseEther, encodeFunctionData } from 'viem'
+import { useAccount, useConnect, useDisconnect, useBalance, useWriteContract, useWaitForTransactionReceipt } from 'wagmi'
+import { baseSepolia } from 'wagmi/chains'
+import { formatEther, parseUnits, encodeFunctionData } from 'viem'
+import { CONTRACT_ADDRESS, DEPLOY_CHAIN } from './wagmi.js'
+import OnChainWillABI from './OnChainWillABI.json'
 
-const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+// USDC on Base Sepolia testnet
+const USDC_BASE = '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
+const USDC_ABI = [
+  { name: 'transfer', type: 'function', inputs: [{ name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' },
+  { name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' },
+  { name: 'balanceOf', type: 'function', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
+]
 const USDC_ABI = [
   {
     name: 'transfer',
@@ -54,9 +62,12 @@ export default function App() {
   const [aiPlan, setAiPlan] = useState(null)
   const [loadingPlan, setLoadingPlan] = useState(false)
   const [approved, setApproved] = useState(false)
-  const [mockTxHash] = useState('0x' + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join(''))
+  const [txHash, setTxHash] = useState(null)
+  const [txStep, setTxStep] = useState('') // 'approving' | 'registering' | 'done'
 
-  const wrongNetwork = isConnected && chain?.id !== base.id
+  const { writeContractAsync } = useWriteContract()
+
+  const wrongNetwork = isConnected && chain?.id !== DEPLOY_CHAIN.id
 
   async function generateAIPlan() {
     if (!isValidAddress(beneficiary)) return
@@ -118,7 +129,7 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
         ) : wrongNetwork ? (
           <WrongNetwork />
         ) : approved ? (
-          <SuccessView txHash={mockTxHash} beneficiary={beneficiary} beneficiaryName={beneficiaryName} timerDays={timerDays} usdcAmount={usdcAmount} address={address} />
+          <SuccessView txHash={txHash} beneficiary={beneficiary} beneficiaryName={beneficiaryName} timerDays={timerDays} usdcAmount={usdcAmount} address={address} />
         ) : (
           <div>
             <StepIndicator current={step} />
@@ -156,8 +167,38 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
                 usdcAmount={usdcAmount}
                 calldata={calldata}
                 address={address}
+                txStep={txStep}
                 onBack={() => setStep(2)}
-                onApprove={() => setApproved(true)}
+                onApprove={async () => {
+                  try {
+                    // Step 1: Approve USDC spending
+                    setTxStep('approving')
+                    const amount = usdcAmount ? parseUnits(usdcAmount, 6) : parseUnits('999999999', 6)
+                    await writeContractAsync({
+                      address: USDC_BASE,
+                      abi: USDC_ABI,
+                      functionName: 'approve',
+                      args: [CONTRACT_ADDRESS, amount],
+                    })
+
+                    // Step 2: Register the will
+                    setTxStep('registering')
+                    const hash = await writeContractAsync({
+                      address: CONTRACT_ADDRESS,
+                      abi: OnChainWillABI,
+                      functionName: 'registerWill',
+                      args: [beneficiary, amount, BigInt(timerDays), beneficiaryName || ''],
+                    })
+
+                    setTxHash(hash)
+                    setTxStep('done')
+                    setApproved(true)
+                  } catch (e) {
+                    console.error(e)
+                    setTxStep('')
+                    alert('Transaction failed: ' + (e.shortMessage || e.message))
+                  }
+                }}
               />
             )}
           </div>
@@ -410,7 +451,7 @@ function Step2({ beneficiary, setBeneficiary, beneficiaryName, setBeneficiaryNam
   )
 }
 
-function Step3({ loading, aiPlan, beneficiary, beneficiaryName, timerDays, usdcAmount, calldata, address, onBack, onApprove }) {
+function Step3({ loading, aiPlan, beneficiary, beneficiaryName, timerDays, usdcAmount, calldata, address, onBack, onApprove, txStep }) {
   return (
     <div className="fade-up">
       <h2 style={{ fontFamily: 'var(--serif)', fontSize: 32, marginBottom: 8, fontWeight: 400 }}>Your inheritance plan</h2>
@@ -466,9 +507,11 @@ function Step3({ loading, aiPlan, beneficiary, beneficiaryName, timerDays, usdcA
           </div>
 
           <div style={{ display: 'flex', gap: 12 }}>
-            <button onClick={onBack} style={{ ...btnGhost, flex: 1 }}>← Edit</button>
-            <button onClick={onApprove} style={{ ...btnGold, flex: 2, background: 'var(--gold)', color: 'var(--ink)', fontWeight: 600 }}>
-              ✓ Approve & Register Will
+            <button onClick={onBack} disabled={!!txStep} style={{ ...btnGhost, flex: 1, opacity: txStep ? 0.4 : 1 }}>← Edit</button>
+            <button onClick={onApprove} disabled={!!txStep} style={{ ...btnGold, flex: 2, background: 'var(--gold)', color: 'var(--ink)', fontWeight: 600, opacity: txStep ? 0.7 : 1 }}>
+              {txStep === 'approving' ? '⏳ Step 1/2: Approving USDC...' :
+               txStep === 'registering' ? '⏳ Step 2/2: Registering Will...' :
+               '✓ Approve & Register Will'}
             </button>
           </div>
         </>
@@ -490,7 +533,7 @@ function SuccessView({ txHash, beneficiary, beneficiaryName, timerDays, usdcAmou
         <div style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--mono)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Transaction confirmed</div>
         <div style={{ fontFamily: 'var(--mono)', fontSize: 11, color: 'var(--gold-light)', wordBreak: 'break-all', marginBottom: 12 }}>{txHash}</div>
         <a
-          href={`https://basescan.org/tx/${txHash}`}
+          href={`https://sepolia.basescan.org/tx/${txHash}`}
           target="_blank"
           rel="noopener noreferrer"
           style={{ fontSize: 12, color: 'var(--gold)', textDecoration: 'none' }}
