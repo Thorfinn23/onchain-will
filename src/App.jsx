@@ -260,25 +260,19 @@ function LandingHero({ connectors, connect }) {
         <em style={{ color: 'var(--gold)' }}>Their future.</em>
       </h1>
       <p className="fade-up-3" style={{ color: 'var(--muted)', fontSize: 16, maxWidth: 480, margin: '0 auto 2.5rem', lineHeight: 1.7 }}>
-        Set up an on-chain inheritance plan in 3 minutes. If you go inactive, your USDC finds its way home — to the people who matter most.
+        Set up an on-chain inheritance plan in 3 minutes. If you go inactive, your ETH finds its way home — to the people who matter most.
       </p>
 
       <div className="fade-up-4" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-        {connectors.slice(0, 2).map(c => {
-          const isCoinbase = c.name === 'Coinbase Wallet'
-          return (
-            <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-              <button onClick={() => connect({ connector: c })} style={btnGold}>
-                {isCoinbase ? '🔵 Connect with Coinbase' : '🦊 Connect MetaMask / Browser Wallet'}
-              </button>
-              <span style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 200, textAlign: 'center', lineHeight: 1.4 }}>
-                {isCoinbase
-                  ? 'Use Coinbase Wallet app or Smart Wallet — best for new users'
-                  : 'Use MetaMask or any browser extension wallet you already have'}
-              </span>
-            </div>
-          )
-        })}
+        {[
+          { label: '🦊 Connect MetaMask', desc: 'Use MetaMask browser extension', connector: connectors.find(c => c.name === 'MetaMask' || c.id === 'metaMask' || c.id === 'injected') },
+          { label: '🔵 Connect Coinbase', desc: 'Use Coinbase Wallet or Smart Wallet', connector: connectors.find(c => c.name === 'Coinbase Wallet') },
+        ].filter(w => w.connector).map(w => (
+          <div key={w.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => connect({ connector: w.connector })} style={btnGold}>{w.label}</button>
+            <span style={{ fontSize: 11, color: 'var(--muted)', maxWidth: 200, textAlign: 'center', lineHeight: 1.4 }}>{w.desc}</span>
+          </div>
+        ))}
       </div>
 
       <div style={{ background: '#110a0a', border: '1px solid #3a1a1a', borderRadius: 'var(--radius)', padding: '0.75rem 1rem', maxWidth: 480, margin: '0 auto 2rem', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
