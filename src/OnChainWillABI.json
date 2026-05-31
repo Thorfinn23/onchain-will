@@ -26,6 +26,12 @@
         "internalType": "address",
         "name": "owner",
         "type": "address"
+      },
+      {
+        "indexed": false,
+        "internalType": "uint256",
+        "name": "refundAmount",
+        "type": "uint256"
       }
     ],
     "name": "WillCancelled",
@@ -74,7 +80,7 @@
       {
         "indexed": false,
         "internalType": "uint256",
-        "name": "usdcAmount",
+        "name": "ethAmount",
         "type": "uint256"
       },
       {
@@ -86,19 +92,6 @@
     ],
     "name": "WillRegistered",
     "type": "event"
-  },
-  {
-    "inputs": [],
-    "name": "USDC",
-    "outputs": [
-      {
-        "internalType": "address",
-        "name": "",
-        "type": "address"
-      }
-    ],
-    "stateMutability": "view",
-    "type": "function"
   },
   {
     "inputs": [],
@@ -168,14 +161,9 @@
   {
     "inputs": [
       {
-        "internalType": "address",
+        "internalType": "address payable",
         "name": "beneficiary",
         "type": "address"
-      },
-      {
-        "internalType": "uint256",
-        "name": "usdcAmount",
-        "type": "uint256"
       },
       {
         "internalType": "uint256",
@@ -190,7 +178,7 @@
     ],
     "name": "registerWill",
     "outputs": [],
-    "stateMutability": "nonpayable",
+    "stateMutability": "payable",
     "type": "function"
   },
   {
@@ -204,13 +192,13 @@
     "name": "wills",
     "outputs": [
       {
-        "internalType": "address",
+        "internalType": "address payable",
         "name": "beneficiary",
         "type": "address"
       },
       {
         "internalType": "uint256",
-        "name": "usdcAmount",
+        "name": "ethAmount",
         "type": "uint256"
       },
       {
