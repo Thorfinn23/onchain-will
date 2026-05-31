@@ -111,7 +111,7 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
         {!isConnected ? (
           <LandingHero onConnect={() => connect({ connector: connectors[0] })} connectors={connectors} connect={connect} />
         ) : wrongNetwork ? (
-          <WrongNetwork />
+          <WrongNetwork selectedChain={selectedChain} onSwitch={() => switchChain({ chainId: selectedChain.id })} />
         ) : approved ? (
           <SuccessView txHash={txHash} beneficiary={beneficiary} beneficiaryName={beneficiaryName} timerDays={timerDays} ethAmount={ethAmount} address={address} chain={chain} />
         ) : (
@@ -301,12 +301,17 @@ function LandingHero({ connectors, connect }) {
   )
 }
 
-function WrongNetwork() {
+function WrongNetwork({ selectedChain, onSwitch }) {
   return (
     <div style={{ textAlign: 'center', padding: '4rem 0' }}>
       <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
-      <h2 style={{ fontFamily: 'var(--serif)', fontSize: 28, marginBottom: 12 }}>Switch to Base</h2>
-      <p style={{ color: 'var(--muted)' }}>Please switch your wallet network to Base mainnet to continue.</p>
+      <h2 style={{ fontFamily: 'var(--serif)', fontSize: 28, marginBottom: 12 }}>Wrong Network</h2>
+      <p style={{ color: 'var(--muted)', marginBottom: '1.5rem' }}>
+        Please switch to <strong style={{ color: 'var(--gold)' }}>{selectedChain?.name || 'Base Sepolia'}</strong> to continue.
+      </p>
+      <button onClick={onSwitch} style={{ ...btnGold, padding: '12px 24px' }}>
+        Switch Network
+      </button>
     </div>
   )
 }
@@ -354,7 +359,7 @@ function Step1({ address, ethBalance, onNext }) {
       <div style={{ background: '#0f0e0c', border: '1px solid #2a2820', borderRadius: 'var(--radius-lg)', padding: '1.5rem', marginBottom: '2rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <span style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Your wallet</span>
-          <span style={{ fontSize: 11, background: '#1a2e1a', color: '#4ade80', padding: '3px 8px', borderRadius: 'var(--radius)', fontFamily: 'var(--mono)' }}>BASE MAINNET</span>
+          <span style={{ fontSize: 11, background: '#1a2e1a', color: '#4ade80', padding: '3px 8px', borderRadius: 'var(--radius)', fontFamily: 'var(--mono)' }}>BASE SEPOLIA</span>
         </div>
         <div style={{ fontFamily: 'var(--mono)', fontSize: 13, color: 'var(--gold-light)', wordBreak: 'break-all', marginBottom: 16 }}>{address}</div>
         {ethBalance && (
