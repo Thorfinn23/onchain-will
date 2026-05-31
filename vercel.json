@@ -28,7 +28,7 @@
         },
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://mainnet.base.org https://sepolia.base.org wss://*.walletconnect.com https://*.walletconnect.com https://api.anthropic.com; img-src 'self' data: https:; frame-ancestors 'none';"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://mainnet.base.org https://sepolia.base.org https://base-sepolia-rpc.publicnode.com wss://*.walletconnect.com https://*.walletconnect.com https://*.walletconnect.org https://api.anthropic.com https://cca-lite.coinbase.com https://*.coinbase.com; img-src 'self' data: https:; frame-ancestors 'none';"
         }
       ]
     }

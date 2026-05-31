@@ -31,7 +31,6 @@ export default function App() {
   const [selectedChain, setSelectedChain] = useState(baseSepolia)
   const isTestnet = selectedChain.id === baseSepolia.id
   const contractAddress = CONTRACTS[selectedChain.id]
-  const usdcAddress = USDC[selectedChain.id]
 
   const { data: ethBalance } = useBalance({ address, chainId: selectedChain.id })
 
