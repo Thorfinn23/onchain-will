@@ -13,7 +13,7 @@ export const config = createConfig({
   ],
   transports: {
     [base.id]: http(),
-    [baseSepolia.id]: http('https://base-sepolia-rpc.publicnode.com'),
+    [baseSepolia.id]: http('https://sepolia.base.org'),
   },
 })
 
