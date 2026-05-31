@@ -19,7 +19,7 @@ export const config = createConfig({
 
 // Contract addresses per network
 export const CONTRACTS = {
-  [baseSepolia.id]: '0xA46d4f92DAa148d39e9b24Cb1711762867fD58e6', // Base Sepolia (testnet)
+  [baseSepolia.id]: '0xa39b3175841C9dAF973dd2AeeFDf3D6Ab81D3c4A', // Base Sepolia (testnet)
   [base.id]: null, // Base Mainnet — deploy when ready
 }
 

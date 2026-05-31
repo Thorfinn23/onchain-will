@@ -1,13 +1,8 @@
 import { useState } from 'react'
 import { useAccount, useConnect, useDisconnect, useBalance, useWriteContract, useSwitchChain } from 'wagmi'
-import { formatEther, parseUnits, encodeFunctionData } from 'viem'
-import { CONTRACTS, USDC, base, baseSepolia } from './wagmi.js'
+import { formatEther, parseEther } from 'viem'
+import { CONTRACTS, base, baseSepolia } from './wagmi.js'
 import OnChainWillABI from './OnChainWillABI.json'
-
-const USDC_ABI = [
-  { name: 'approve', type: 'function', inputs: [{ name: 'spender', type: 'address' }, { name: 'amount', type: 'uint256' }], outputs: [{ type: 'bool' }], stateMutability: 'nonpayable' },
-  { name: 'balanceOf', type: 'function', inputs: [{ name: 'account', type: 'address' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' },
-]
 
 const TIMER_OPTIONS = [
   { label: '30 days', value: 30, desc: 'High urgency — best for critical assets' },
@@ -44,7 +39,7 @@ export default function App() {
   const [beneficiary, setBeneficiary] = useState('')
   const [beneficiaryName, setBeneficiaryName] = useState('')
   const [timerDays, setTimerDays] = useState(60)
-  const [usdcAmount, setUsdcAmount] = useState('')
+  const [ethAmount, setEthAmount] = useState('')
   const [aiPlan, setAiPlan] = useState(null)
   const [loadingPlan, setLoadingPlan] = useState(false)
   const [approved, setApproved] = useState(false)
@@ -82,12 +77,12 @@ Their details:
 - Beneficiary name: ${beneficiaryName || 'their loved one'}
 - Beneficiary wallet: ${beneficiary}
 - Inactivity trigger: ${timerDays} days of wallet inactivity
-- Amount to transfer: ${usdcAmount || 'all'} USDC
+- Amount to transfer: ${ethAmount || 'all'} ETH (Base Sepolia)
 
 Write a warm, clear, human-readable inheritance plan. Include:
 1. A 2-sentence plain-English summary of what will happen
 2. Exactly what the inactivity trigger means in practice
-3. The specific action that will execute (USDC transfer calldata prepared)
+3. The specific action that will execute (ETH transfer on Base)
 4. A reassurance about security and human approval required
 5. A suggested message to leave for their beneficiary
 
@@ -99,16 +94,14 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
       const text = data.content?.[0]?.text || 'Plan generated successfully.'
       setAiPlan(text)
     } catch (e) {
-      setAiPlan(`Your OnChain Will has been prepared.\n\n**Summary:** If your wallet at ${shortenAddress(address)} shows no activity for ${timerDays} days, ${usdcAmount || 'your'} USDC will be sent to ${beneficiaryName || 'your beneficiary'} at ${shortenAddress(beneficiary)}.\n\n**Inactivity trigger:** The system monitors your last transaction. After ${timerDays} days of silence, the prepared transfer is queued for one final human approval.\n\n**Calldata prepared:** USDC transfer → ${shortenAddress(beneficiary)} — ready for your approval.\n\n**Security:** Nothing moves without your explicit approval. You remain in control at all times.\n\n**Message for your loved one:** "If you're reading this, know that I planned ahead for you. This transfer is my way of making sure you're taken care of."`)
+      setAiPlan(`Your OnChain Will has been prepared.\n\n**Summary:** If your wallet at ${shortenAddress(address)} shows no activity for ${timerDays} days, ${ethAmount || 'your'} ETH will be sent to ${beneficiaryName || 'your beneficiary'} at ${shortenAddress(beneficiary)} on Base.\n\n**Inactivity trigger:** The system monitors your last transaction. After ${timerDays} days of silence, the prepared transfer is queued for one final human approval.\n\n**ETH transfer prepared:** ${ethAmount || '?'} ETH → ${shortenAddress(beneficiary)} — ready for your approval.\n\n**Security:** Nothing moves without your explicit approval. You remain in control at all times.\n\n**Message for your loved one:** "If you're reading this, know that I planned ahead for you. This transfer is my way of making sure you're taken care of."`)
     }
     setLoadingPlan(false)
   }
 
-  const calldata = beneficiary && isValidAddress(beneficiary) ? encodeFunctionData({
-    abi: USDC_ABI,
-    functionName: 'transfer',
-    args: [beneficiary, BigInt(Math.floor(parseFloat(usdcAmount || '0') * 1e6))]
-  }) : null
+  const calldata = beneficiary && isValidAddress(beneficiary) && ethAmount
+    ? `Send ${ethAmount} ETH → ${shortenAddress(beneficiary)} after ${timerDays} days of inactivity`
+    : null
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -121,7 +114,7 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
         ) : wrongNetwork ? (
           <WrongNetwork />
         ) : approved ? (
-          <SuccessView txHash={txHash} beneficiary={beneficiary} beneficiaryName={beneficiaryName} timerDays={timerDays} usdcAmount={usdcAmount} address={address} chain={chain} />
+          <SuccessView txHash={txHash} beneficiary={beneficiary} beneficiaryName={beneficiaryName} timerDays={timerDays} ethAmount={ethAmount} address={address} chain={chain} />
         ) : (
           <div>
             <StepIndicator current={step} />
@@ -142,8 +135,8 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
                 setBeneficiaryName={setBeneficiaryName}
                 timerDays={timerDays}
                 setTimerDays={setTimerDays}
-                usdcAmount={usdcAmount}
-                setUsdcAmount={setUsdcAmount}
+                ethAmount={ethAmount}
+                setEthAmount={setEthAmount}
                 onBack={() => setStep(1)}
                 onNext={generateAIPlan}
               />
@@ -156,7 +149,7 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
                 beneficiary={beneficiary}
                 beneficiaryName={beneficiaryName}
                 timerDays={timerDays}
-                usdcAmount={usdcAmount}
+                ethAmount={ethAmount}
                 calldata={calldata}
                 address={address}
                 txStep={txStep}
@@ -167,24 +160,15 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
                     return
                   }
                   try {
-                    // Step 1: Approve USDC spending
-                    setTxStep('approving')
-                    const amount = usdcAmount ? parseUnits(usdcAmount, 6) : parseUnits('999999999', 6)
-                    await writeContractAsync({
-                      address: usdcAddress,
-                      abi: USDC_ABI,
-                      functionName: 'approve',
-                      args: [contractAddress, amount],
-                      chainId: selectedChain.id,
-                    })
-
-                    // Step 2: Register the will
+                    // Single step: Register will + deposit ETH
                     setTxStep('registering')
+                    const amount = parseEther(ethAmount || '0')
                     const hash = await writeContractAsync({
                       address: contractAddress,
                       abi: OnChainWillABI,
                       functionName: 'registerWill',
-                      args: [beneficiary, amount, BigInt(timerDays), beneficiaryName || ''],
+                      args: [beneficiary, BigInt(timerDays), beneficiaryName || ''],
+                      value: amount,
                       chainId: selectedChain.id,
                     })
 
@@ -400,9 +384,9 @@ function Step1({ address, ethBalance, onNext }) {
   )
 }
 
-function Step2({ beneficiary, setBeneficiary, beneficiaryName, setBeneficiaryName, timerDays, setTimerDays, usdcAmount, setUsdcAmount, onBack, onNext }) {
+function Step2({ beneficiary, setBeneficiary, beneficiaryName, setBeneficiaryName, timerDays, setTimerDays, ethAmount, setEthAmount, onBack, onNext }) {
   const validAddress = beneficiary === '' || isValidAddress(beneficiary)
-  const canProceed = isValidAddress(beneficiary) && timerDays
+  const canProceed = isValidAddress(beneficiary) && timerDays && ethAmount && parseFloat(ethAmount) > 0
 
   return (
     <div className="fade-up">
@@ -432,18 +416,20 @@ function Step2({ beneficiary, setBeneficiary, beneficiaryName, setBeneficiaryNam
       </div>
 
       <div style={fieldGroup}>
-        <label style={fieldLabel}>USDC amount to transfer <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(leave blank for full balance)</span></label>
+        <label style={fieldLabel}>ETH amount to deposit <span style={{ color: '#e74c3c' }}>*</span></label>
         <div style={{ position: 'relative' }}>
           <input
-            style={{ ...fieldInput, paddingLeft: 56 }}
-            placeholder="0.00"
+            style={{ ...fieldInput, paddingLeft: 52 }}
+            placeholder="0.001"
             type="number"
             min="0"
-            value={usdcAmount}
-            onChange={e => setUsdcAmount(e.target.value)}
+            step="0.001"
+            value={ethAmount}
+            onChange={e => setEthAmount(e.target.value)}
           />
-          <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>USDC</span>
+          <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: 'var(--muted)', fontFamily: 'var(--mono)' }}>ETH</span>
         </div>
+        <span style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, display: 'block' }}>This ETH will be locked in the contract and sent to your beneficiary if triggered</span>
       </div>
 
       <div style={fieldGroup}>
@@ -480,7 +466,7 @@ function Step2({ beneficiary, setBeneficiary, beneficiaryName, setBeneficiaryNam
   )
 }
 
-function Step3({ loading, aiPlan, beneficiary, beneficiaryName, timerDays, usdcAmount, calldata, address, onBack, onApprove, txStep }) {
+function Step3({ loading, aiPlan, beneficiary, beneficiaryName, timerDays, ethAmount, calldata, address, onBack, onApprove, txStep }) {
   return (
     <div className="fade-up">
       <h2 style={{ fontFamily: 'var(--serif)', fontSize: 32, marginBottom: 8, fontWeight: 400 }}>Your inheritance plan</h2>
@@ -507,10 +493,10 @@ function Step3({ loading, aiPlan, beneficiary, beneficiaryName, timerDays, usdcA
             <div style={{ fontSize: 12, color: 'var(--muted)', fontFamily: 'var(--mono)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 12 }}>Prepared calldata</div>
             <div style={{ display: 'grid', gap: 10 }}>
               {[
-                { label: 'Contract', value: 'USDC on Base (0x8335...)', mono: true },
-                { label: 'Function', value: 'transfer(address, uint256)', mono: true },
+                { label: 'Contract', value: 'OnChainWill on Base Sepolia', mono: true },
+                { label: 'Function', value: 'registerWill(address, uint256, string)', mono: true },
                 { label: 'To', value: shortenAddress(beneficiary) + (beneficiaryName ? ` — ${beneficiaryName}` : ''), mono: false },
-                { label: 'Amount', value: usdcAmount ? `${usdcAmount} USDC` : 'Full balance', mono: false },
+                { label: 'Amount', value: ethAmount ? `${ethAmount} ETH` : '—', mono: false },
                 { label: 'Trigger', value: `${timerDays} days of inactivity`, mono: false },
                 { label: 'Gas estimate', value: '< $0.01 on Base', mono: false },
               ].map(row => (
@@ -538,9 +524,7 @@ function Step3({ loading, aiPlan, beneficiary, beneficiaryName, timerDays, usdcA
           <div style={{ display: 'flex', gap: 12 }}>
             <button onClick={onBack} disabled={!!txStep} style={{ ...btnGhost, flex: 1, opacity: txStep ? 0.4 : 1 }}>← Edit</button>
             <button onClick={onApprove} disabled={!!txStep} style={{ ...btnGold, flex: 2, background: 'var(--gold)', color: 'var(--ink)', fontWeight: 600, opacity: txStep ? 0.7 : 1 }}>
-              {txStep === 'approving' ? '⏳ Step 1/2: Approving USDC...' :
-               txStep === 'registering' ? '⏳ Step 2/2: Registering Will...' :
-               '✓ Approve & Register Will'}
+              {txStep === 'registering' ? '⏳ Registering Will on Base...' : '✓ Deposit ETH & Register Will'}
             </button>
           </div>
         </>
@@ -549,13 +533,13 @@ function Step3({ loading, aiPlan, beneficiary, beneficiaryName, timerDays, usdcA
   )
 }
 
-function SuccessView({ txHash, beneficiary, beneficiaryName, timerDays, usdcAmount, address, chain }) {
+function SuccessView({ txHash, beneficiary, beneficiaryName, timerDays, ethAmount, address, chain }) {
   return (
     <div className="fade-up" style={{ textAlign: 'center', padding: '3rem 0' }}>
       <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
       <h2 style={{ fontFamily: 'var(--serif)', fontSize: 36, marginBottom: 12, fontWeight: 400 }}>Will registered on Base</h2>
       <p style={{ color: 'var(--muted)', maxWidth: 480, margin: '0 auto 2rem', lineHeight: 1.7 }}>
-        Your inheritance plan is active. If your wallet shows no activity for <strong style={{ color: 'var(--gold)' }}>{timerDays} days</strong>, {usdcAmount ? `${usdcAmount} USDC` : 'your USDC'} will be queued for transfer to {beneficiaryName || shortenAddress(beneficiary)}.
+        Your inheritance plan is active. If your wallet shows no activity for <strong style={{ color: 'var(--gold)' }}>{timerDays} days</strong>, {ethAmount ? `${ethAmount} ETH` : 'your ETH'} will be queued for transfer to {beneficiaryName || shortenAddress(beneficiary)}.
       </p>
 
       <div style={{ background: '#0a0f0a', border: '1px solid #1e2d1e', borderRadius: 'var(--radius-lg)', padding: '1.5rem', maxWidth: 480, margin: '0 auto 2rem', textAlign: 'left' }}>
@@ -575,7 +559,7 @@ function SuccessView({ txHash, beneficiary, beneficiaryName, timerDays, usdcAmou
         {[
           { label: 'Beneficiary', value: beneficiaryName || shortenAddress(beneficiary) },
           { label: 'Trigger', value: `${timerDays} days` },
-          { label: 'Amount', value: usdcAmount ? `${usdcAmount} USDC` : 'Full balance' },
+          { label: 'Amount', value: ethAmount ? `${ethAmount} ETH` : '—' },
         ].map(s => (
           <div key={s.label} style={{ background: '#111', border: '1px solid #1e1c18', borderRadius: 'var(--radius)', padding: '1rem', textAlign: 'center' }}>
             <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{s.label}</div>
