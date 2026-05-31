@@ -159,6 +159,10 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
                     return
                   }
                   try {
+                    // Ensure correct network first
+                    if (chain?.id !== selectedChain.id) {
+                      await switchChain({ chainId: selectedChain.id })
+                    }
                     // Single step: Register will + deposit ETH
                     setTxStep('registering')
                     const amount = parseEther(ethAmount || '0')
@@ -168,7 +172,6 @@ Keep it under 250 words. Be warm and human, not technical. This is about protect
                       functionName: 'registerWill',
                       args: [beneficiary, BigInt(timerDays), beneficiaryName || ''],
                       value: amount,
-                      chainId: selectedChain.id,
                     })
 
                     setTxHash(hash)
