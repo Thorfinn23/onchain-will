@@ -1,15 +1,14 @@
 import { createConfig, http } from 'wagmi'
 import { base, baseSepolia } from 'wagmi/chains'
-import { injected, coinbaseWallet, metaMask } from 'wagmi/connectors'
+import { injected, coinbaseWallet } from 'wagmi/connectors'
 
 export const config = createConfig({
   chains: [baseSepolia, base],
   connectors: [
-    metaMask(),
-    injected({ target: 'metaMask' }),
+    injected(),
     coinbaseWallet({
       appName: 'OnChain Will',
-      preference: 'all', // allow both smart wallet and regular
+      preference: 'all',
     }),
   ],
   transports: {
