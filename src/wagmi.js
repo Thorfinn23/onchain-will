@@ -13,7 +13,7 @@ export const config = createConfig({
   ],
   transports: {
     [base.id]: http(),
-    [baseSepolia.id]: http('https://sepolia.base.org'),
+    [baseSepolia.id]: http('https://base-sepolia.g.alchemy.com/v2/demo'),
   },
 })
 
